@@ -4,10 +4,12 @@ import tkinter as tk
 from tkinter import filedialog
 from io import BytesIO
 import scipy.io.wavfile as wavfile
+import os
 
 # Constants
+api_key = os.environ.get("HUGGINGFACE_API_KEY")
 API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
-HEADERS = {"Authorization": "Bearer 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"}
+HEADERS = {"Authorization": f"Bearer {api_key}"}
 
 # Step 1: Transcribe Audio
 def transcribe_audio(file_path):

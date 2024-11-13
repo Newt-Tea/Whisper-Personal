@@ -8,10 +8,12 @@ import threading
 import time
 from io import BytesIO
 import scipy.io.wavfile as wavfile
+import os
 
 # Constants
+api_key = os.environ.get("HUGGINGFACE_API_KEY")
 API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
-HEADERS = {"Authorization": "Bearer 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"}
+HEADERS = {"Authorization": f"Bearer {api_key}"}
 DEFAULT_SAMPLERATE = 16000  # Fallback sample rate
 recording = False
 
