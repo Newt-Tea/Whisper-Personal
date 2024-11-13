@@ -10,9 +10,9 @@ from io import BytesIO
 import scipy.io.wavfile as wavfile
 
 # Constants
-API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v2"
+API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
 HEADERS = {"Authorization": "Bearer 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"}
-SAMPLERATE = 16000  # Set a standard sampling rate for speech recording
+DEFAULT_SAMPLERATE = 16000  # Fallback sample rate
 recording = False
 
 # Default file names
@@ -20,16 +20,29 @@ default_original_filename = "transcription.txt"
 default_cleaned_filename = "cleaned_transcription.txt"
 default_audio_filename = "recorded_audio.wav"
 
+# Step 0: Find all inputs at 44.1 kHz or 22.05 kHz
+def get_input_devices():
+    devices = sd.query_devices()
+    available_devices_44100 = []
+    available_devices_22050 = []
+
+    for i, device in enumerate(devices):
+        if device['max_input_channels'] > 0 and device['default_samplerate'] == 44100:
+            available_devices_44100.append((i, device['name']))
+        elif device['max_input_channels'] > 0 and device['default_samplerate'] == 22050:
+            available_devices_22050.append((i, device['name']))
+
+    return available_devices_44100 if available_devices_44100 else available_devices_22050
+
 # Step 1: Start Recording Audio until stopped
-def record_audio(selected_device):
+def record_audio(selected_device, samplerate):
     global recording
     audio_data = []
     print("Recording started. Type 'stop' to stop.")
     recording = True
     
-    # Recording loop
     while recording:
-        chunk = sd.rec(int(SAMPLERATE * 0.5), samplerate=SAMPLERATE, channels=1, dtype=np.int16, device=selected_device)  # Record in chunks of 0.5 seconds
+        chunk = sd.rec(int(samplerate * 30), samplerate=samplerate, channels=1, dtype=np.int16, device=selected_device)
         sd.wait()
         audio_data.append(chunk)
     
@@ -47,10 +60,9 @@ def stop_recording():
                 break
 
 # Step 3: Transcribe Audio with Retry Logic if Model is Loading
-def transcribe_audio(audio_data):
-    # Save the recorded data as a temporary wav file in memory
+def transcribe_audio(audio_data, samplerate):
     wav_buffer = BytesIO()
-    wavfile.write(wav_buffer, SAMPLERATE, audio_data)
+    wavfile.write(wav_buffer, samplerate, audio_data)
     wav_buffer.seek(0)
     
     max_retries = 5
@@ -80,7 +92,7 @@ def remove_filler_words(transcription):
     cleaned_text = filler_pattern.sub("", transcription)
     return cleaned_text
 
-# Step 5: Save Transcription via File Explorer
+# Step 5: Save Files via File Explorer
 def save_file(content, dialog_title, default_filename, filetypes):
     root = tk.Tk()
     root.withdraw()  # Hide the root window
@@ -92,42 +104,93 @@ def save_file(content, dialog_title, default_filename, filetypes):
     else:
         print("Save operation canceled.")
 
+# Step 6: Save Recorded Audio
+def save_audio(audio_data, samplerate):
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+    audio_file_path = filedialog.asksaveasfilename(title="Save Recorded Audio", defaultextension=".wav", initialfile=default_audio_filename, filetypes=[("WAV files", "*.wav")])
+    if audio_file_path:
+        wavfile.write(audio_file_path, samplerate, audio_data)
+        print(f"Audio saved to {audio_file_path}")
+    else:
+        print("Audio save operation canceled.")
+
+# Step 7: Get Supported Sample Rates for Selected Device
+def get_supported_samplerate(device):
+    supported_samplerates = []
+    if device['default_samplerate'] >= 44100:
+        supported_samplerates.append(44100)
+    if device['default_samplerate'] >= 22050:
+        supported_samplerates.append(22050)
+    supported_samplerates.append(int(device['default_samplerate']))
+    
+    return supported_samplerates
+
+# Step 8: Display Sample Rate Menu
+def display_sample_rate_menu(supported_samplerates):
+    print("Choose a sample rate from the supported options:")
+    for idx, rate in enumerate(supported_samplerates):
+        print(f"{idx + 1}: {rate} Hz")
+    
+    while True:
+        try:
+            selected_index = int(input("Enter the number corresponding to the sample rate you want to use: ")) - 1
+            if 0 <= selected_index < len(supported_samplerates):
+                return supported_samplerates[selected_index]
+            else:
+                print("Invalid selection. Please try again.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+# Load Model Function
+def load_model():
+    print("Loading the model... This may take a moment.")
+    time.sleep(5)  # Simulating a delay for loading the model
+    print("Model loaded successfully.")
+
 # Main Process Flow
 def main():
-    # List available audio input devices
-    devices = sd.query_devices()
+    model_thread = threading.Thread(target=load_model)
+    model_thread.start()
+
+    input_devices = get_input_devices()
+    
+    if not input_devices:
+        print("No suitable audio input devices found.")
+        return
+
     print("Available audio input devices:")
-    for idx, device in enumerate(devices):
-        if device['max_input_channels'] > 0:
-            print(f"{idx}: {device['name']}")
+    for index, name in input_devices:
+        print(f"{index}: {name}")
+    
+    selected_device_index = int(input("Select an input device by index: "))
+    print(f"Selected device: {input_devices[selected_device_index][1]}")
 
-    selected_device = int(input("Select an input device by index: "))
-    print(f"Selected device: {devices[selected_device]['name']}")
+    selected_device = sd.query_devices(input_devices[selected_device_index][0])
+    supported_samplerates = get_supported_samplerate(selected_device)
+    selected_samplerate = display_sample_rate_menu(supported_samplerates)
 
-    # Start recording in a separate thread to allow stopping it
-    record_thread = threading.Thread(target=stop_recording)
-    record_thread.start()
+    print("Recording started. Type 'stop' to stop.")
+    
+    stop_thread = threading.Thread(target=stop_recording)
+    stop_thread.start()
 
-    # Record audio until stopped
-    audio_data = record_audio(selected_device)
-    record_thread.join()  # Wait for the user to stop recording
+    audio_data = record_audio(input_devices[selected_device_index][0], selected_samplerate)
+    model_thread.join()
+    print("Model loaded successfully.")
+    stop_thread.join()
 
-    # Save the recorded audio to a file
-    wavfile.write(default_audio_filename, SAMPLERATE, audio_data)
-    print(f"Audio saved to {default_audio_filename}")
+    save_audio(audio_data, selected_samplerate)
 
-    # Transcribe the recorded audio with retry logic
-    transcription = transcribe_audio(audio_data)
+    transcription = transcribe_audio(audio_data, selected_samplerate)
+
     if transcription:
-        print("Original Transcription:\n", transcription)
-
-        # Save the original transcription
-        save_file(transcription, "Save the original transcription", default_original_filename, [("Text Files", "*.txt")])
-
-        # Remove fillers and save the cleaned transcription
         cleaned_transcription = remove_filler_words(transcription)
-        print("Cleaned Transcription:\n", cleaned_transcription)
-        save_file(cleaned_transcription, "Save the cleaned transcription", default_cleaned_filename, [("Text Files", "*.txt")])
+        save_file(transcription, "Save Original Transcription", default_original_filename, [("Text Files", "*.txt")])
+        save_file(cleaned_transcription, "Save Cleaned Transcription", default_cleaned_filename, [("Text Files", "*.txt")])
+        print("Transcriptions saved successfully.")
+    else:
+        print("Transcription failed.")
 
 if __name__ == "__main__":
     main()
