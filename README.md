@@ -2,12 +2,6 @@
 
 Welcome to the Whisper-Personal repository! This project is designed to [brief description of the project].
 
-## Features
-
-- Feature 1
-- Feature 2
-- Feature 3
-
 ## Dependancies
     
     Python >= 3.12.6
@@ -16,11 +10,15 @@ Welcome to the Whisper-Personal repository! This project is designed to [brief d
 
 To use this project, follow these steps:
 
-    1. Download the scripts by cloning or zipping the repo
-    2. Ensure Python is installed with ```sh python --version ```
-    3. Add your whisper API key
-    3. Run main.py 
-    4. If the model fails to transcript import your file into backup.py 
+1. Download the scripts by cloning or zipping the repo
+2. Ensure Python is installed with ```python --version ```
+3. Run ```pip install -r requirements.txt```
+4. Add your whisper API key
+    - Set your HUGGINGFACE_API_KEY enviroment variable (requires restart) or
+    - Change line 14 in main.py and line 10 in backup.py to api_key = {your_Key}
+- You only have to run the commands above once
+5. Run main.py 
+6. If the model fails to transcript import your file into backup.py 
 
 ## Contributing
 
