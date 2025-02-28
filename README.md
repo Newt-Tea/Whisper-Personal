@@ -1,6 +1,6 @@
 # Whisper-Personal
 
-Welcome to the Whisper-Personal repository! This project is designed to [brief description of the project].
+Welcome to the Whisper-Personal repository! This project is designed to Transcribe and save audio files.
 
 ## Dependancies
     
