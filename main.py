@@ -171,8 +171,6 @@ def main():
     selected_device = sd.query_devices(input_devices[selected_device_index][0])
     supported_samplerates = get_supported_samplerate(selected_device)
     selected_samplerate = display_sample_rate_menu(supported_samplerates)
-
-    print("Recording started. Type 'stop' to stop.")
     
     stop_thread = threading.Thread(target=stop_recording)
     stop_thread.start()
